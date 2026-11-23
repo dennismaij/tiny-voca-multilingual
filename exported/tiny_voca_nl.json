@@ -79,9 +79,9 @@
  ],
  "max_tokens": 512,
  "max_frames": 3000,
- "step": 100000,
+ "step": 103500,
  "frontend": "espeak",
- "frontend_fingerprint": "09ecda2260016a1d77743b433275f01b4656ca30e6bf453b7affacbd275ff3fe",
+ "frontend_fingerprint": "ac63ba43df9d1b48f95dff3e24393113de6dfce4dcd7c40c4bedddba3c4e0cb2",
  "inputs": [
   "tokens",
   "stress",
