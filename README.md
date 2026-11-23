@@ -64,6 +64,9 @@ python scripts/run_tts.py \
 ```
 
 ### ⚡ Standalone ONNX Runtime (Zero-PyTorch Deployment)
+
+The pre-trained Dutch model is bundled directly in the repository under [`exported/tiny_voca_nl.onnx`](exported/tiny_voca_nl.onnx) (fine-tuned on tech loanwords and morphological stress rules):
+
 ```bash
 python scripts/run_tts.py \
   --lang nl \
@@ -72,6 +75,10 @@ python scripts/run_tts.py \
   --text "Dit model draait razendsnel met ONNX Runtime zonder PyTorch!" \
   --output output_onnx.wav
 ```
+
+Audio samples are available in the [`samples/`](samples/) directory:
+- [`samples/umbris_finetuned_f2.wav`](samples/umbris_finetuned_f2.wav) (Female - Colette)
+- [`samples/umbris_finetuned_m2.wav`](samples/umbris_finetuned_m2.wav) (Male - Maarten)
 
 ---
 

@@ -7,7 +7,9 @@ data/
 runs/
 *.pt
 *.onnx
+!exported/*.onnx
 *.wav
+!samples/*.wav
 *.flac
 *.mp3
 .env
