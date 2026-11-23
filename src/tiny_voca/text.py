@@ -98,7 +98,7 @@ LANGUAGE_CONFIGS = {
         "fallback": {
             "tʲ": ("t", "j"), "dʲ": ("d", "j"), "nʲ": ("n", "j"), "sʲ": ("s", "j"), "lʲ": ("l", "j"),
             "kʲ": ("k", "j"), "pʲ": ("p", "j"), "bʲ": ("b", "j"), "mʲ": ("m", "j"),
-            "ɻ": ("r",), "ʁ": ("r",), "ɹ": ("r",), "ç": ("x",), "g": ("ɣ",),
+            "ɻ": ("r",), "ʁ": ("r",), "ɹ": ("r",), "ç": ("x",), "g": ("ɣ",), "ɲ": ("n", "j"),
             "ɑu": ("ʌʊ",), "ou": ("ʌʊ",), "ɛi": ("ɛɪ",), "e": ("eː",), "o": ("oː",), "a": ("ɑ",),
             "œ": ("øː",), "ts": ("t", "s"), "dz": ("d", "z"), "θ": ("s",), "ð": ("z",),
         },
@@ -298,21 +298,87 @@ def espeak_version():
     return subprocess.run([espeak_executable(), "--version"], capture_output=True, text=True, check=True, timeout=10).stdout.strip()
 
 
+# Dutch Pronunciation & Stress Lexicon
+# Resolves eSpeak-NG stress bugs (e.g. -eren verbs, prefixed adjectives) and English loanwords in Dutch text.
+DUTCH_WORD_OVERRIDES = {
+    # Latinate -eren verbs & participles (stress on penult syllable)
+    "opererend": [("oː", 0), ("p", 0), ("ə", 0), ("r", 0), ("eː", 1), ("r", 0), ("ə", 0), ("n", 0), ("t", 0)],
+    "opereren": [("oː", 0), ("p", 0), ("ə", 0), ("r", 0), ("eː", 1), ("r", 0), ("ə", 0), ("n", 0)],
+    "opereert": [("oː", 0), ("p", 0), ("ə", 0), ("r", 0), ("eː", 1), ("r", 0), ("t", 0)],
+    "geopereerd": [("ɣ", 0), ("ə", 0), ("oː", 0), ("p", 0), ("ə", 0), ("r", 0), ("eː", 1), ("r", 0), ("t", 0)],
+    "concept": [("k", 0), ("ɔ", 0), ("n", 0), ("s", 0), ("ɛ", 1), ("p", 0), ("t", 0)],
+    "concepten": [("k", 0), ("ɔ", 0), ("n", 0), ("s", 0), ("ɛ", 1), ("p", 0), ("t", 0), ("ə", 0), ("n", 0)],
+    "complex": [("k", 0), ("ɔ", 0), ("m", 0), ("p", 0), ("l", 0), ("ɛ", 1), ("k", 0), ("s", 0)],
+    "complexe": [("k", 0), ("ɔ", 0), ("m", 0), ("p", 0), ("l", 0), ("ɛ", 1), ("k", 0), ("s", 0), ("ə", 0)],
+    "meedogenloze": [("m", 0), ("eː", 0), ("d", 0), ("oː", 1), ("ɣ", 0), ("ə", 0), ("n", 0), ("l", 0), ("oː", 0), ("z", 0), ("ə", 0)],
+    "meedogenloos": [("m", 0), ("eː", 0), ("d", 0), ("oː", 1), ("ɣ", 0), ("ə", 0), ("n", 0), ("l", 0), ("oː", 0), ("s", 0)],
+    "uiteindelijke": [("œy", 0), ("t", 0), ("ɛɪ", 1), ("n", 0), ("d", 0), ("ə", 0), ("l", 0), ("ə", 0), ("k", 0), ("ə", 0)],
+    "uiteindelijk": [("œy", 0), ("t", 0), ("ɛɪ", 1), ("n", 0), ("d", 0), ("ə", 0), ("l", 0), ("ə", 0), ("k", 0)],
+    
+    # Borrowed words & tech terminology
+    "edge": [("ɛ", 1), ("dʒ", 0)],
+    "cases": [("k", 1), ("eː", 0), ("z", 0), ("ə", 0), ("s", 0)],
+    "case": [("k", 1), ("eː", 0), ("s", 0)],
+    "drag": [("d", 1), ("r", 0), ("ɛ", 0), ("k", 0)],
+    "happy": [("h", 1), ("ɛ", 0), ("p", 0), ("i", 0)],
+    "path": [("p", 1), ("aː", 0), ("t", 0)],
+    "stresstests": [("s", 0), ("t", 0), ("r", 0), ("ɛ", 1), ("s", 0), ("t", 0), ("ɛ", 0), ("s", 0), ("t", 0), ("s", 0)],
+    "stresstest": [("s", 0), ("t", 0), ("r", 0), ("ɛ", 1), ("s", 0), ("t", 0), ("ɛ", 0), ("s", 0), ("t", 0)],
+    "occlusion": [("ə", 0), ("k", 0), ("l", 0), ("uː", 1), ("ʒ", 0), ("ə", 0), ("n", 0)],
+    "umbris": [("ɵ", 1), ("m", 0), ("b", 0), ("r", 0), ("ɪ", 0), ("s", 0)],
+    "orbious": [("ɔ", 1), ("r", 0), ("b", 0), ("i", 0), ("j", 0), ("ə", 0), ("s", 0)],
+    "zinsser": [("z", 1), ("ɪ", 0), ("n", 0), ("s", 0), ("ə", 0), ("r", 0)],
+    "faalmodi": [("f", 1), ("aː", 0), ("l", 0), ("m", 0), ("oː", 0), ("d", 0), ("i", 0)],
+    "risicoanalyse": [("r", 1), ("i", 0), ("z", 0), ("i", 0), ("k", 0), ("oː", 0), ("aː", 0), ("n", 0), ("aː", 0), ("l", 0), ("i", 0), ("z", 0), ("ə", 0)],
+    "foutanalyse": [("f", 1), ("ʌʊ", 0), ("t", 0), ("aː", 0), ("n", 0), ("aː", 0), ("l", 0), ("i", 0), ("z", 0), ("ə", 0)],
+    "online": [("ɔ", 1), ("n", 0), ("l", 0), ("aɪ", 1), ("n", 0)],
+    "tools": [("t", 1), ("uː", 0), ("l", 0), ("s", 0)],
+    "tool": [("t", 1), ("uː", 0), ("l", 0)],
+    "prompt": [("p", 0), ("r", 0), ("ɔ", 1), ("m", 0), ("t", 0)],
+    "prompts": [("p", 0), ("r", 0), ("ɔ", 1), ("m", 0), ("t", 0), ("s", 0)],
+    "dashboard": [("d", 1), ("ɛ", 0), ("ʃ", 0), ("b", 0), ("ɔː", 0), ("r", 0), ("t", 0)],
+}
+
+
+def fix_dutch_word(text_word, units):
+    """Normalize Dutch syllable stress and tech loanword pronunciations."""
+    clean = re.sub(r"[^\w\-]", "", text_word).lower()
+    if clean in DUTCH_WORD_OVERRIDES:
+        return list(DUTCH_WORD_OVERRIDES[clean])
+    
+    # Morphological rule for 3+ syllable verbs ending in -eren or -erend (stress on penultimate -re-)
+    phones = [u[0] for u in units]
+    if len(phones) >= 6 and phones[-4:] in (['r', 'ə', 'n', 't'], ['r', 'ə', 'n']):
+        vowel_idx = len(phones) - 5
+        if phones[vowel_idx] in ('eː', 'ɪː', 'ɛː', 'e'):
+            new_units = [(p, 0) for p, _ in units]
+            new_units[vowel_idx] = (new_units[vowel_idx][0], 1)
+            # If initial syllable was reduced to short /ɔ/, restore full vowel /oː/
+            if new_units[0][0] in ('ɔ', 'o'):
+                new_units[0] = ('oː', 0)
+            return new_units
+            
+    return units
+
+
 def espeak_words(piece):
     """Phonemize one text piece. Returns words as lists of ``(phone, stress)``.
 
     The input must end with a newline: eSpeak NG 1.51 silently drops the last
     character of unterminated standard input.
     """
+    text_words = [re.sub(r"[^\w\-]", "", w).lower() for w in piece.split()]
     result = subprocess.run(
         [espeak_executable(), "-q", "--ipa", "--sep=" + SEPARATOR, "-v", ESPEAK_VOICE, "--stdin"],
         input=piece.rstrip("\n") + "\n", text=True, capture_output=True, check=True, timeout=30)
-    return parse_espeak(result.stdout)
+    return parse_espeak(result.stdout, text_words=text_words)
 
 
-def parse_espeak(output):
+def parse_espeak(output, text_words=None):
     words = []
-    for word in _LANGUAGE_TAG.sub("", output).split():
+    output_words = _LANGUAGE_TAG.sub("", output).split()
+    for idx, word in enumerate(output_words):
+        text_word = text_words[idx] if (text_words and idx < len(text_words)) else ""
         units = []
         for unit in word.split(SEPARATOR):
             stress = 0
@@ -324,6 +390,8 @@ def parse_espeak(output):
             if unit:
                 units.append((unit, stress))
         if units:
+            if _language == "nl":
+                units = fix_dutch_word(text_word, units)
             words.append(units)
     return words
 
