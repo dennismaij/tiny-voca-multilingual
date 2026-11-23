@@ -21,7 +21,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from .config import Config
-from .text import PHONE_IDS, SYMBOL_TO_ID, VOWELS
+from .text import PHONE_IDS, SYMBOL_TO_ID, VOWEL_IDS
 
 
 class UtteranceTooLong(ValueError):
@@ -124,15 +124,16 @@ def pulse_train(f0, sample_rate, hop, limit=0.47, phase=None):
     signal stays continuous while the pitch glides. Float64 keeps the phase exact.
     """
     frames = f0.shape[1]
-    knots = torch.log(f0.double().clamp_min(1.0))
+    dtype = torch.float32 if f0.device.type == "mps" else torch.float64
+    knots = torch.log(f0.to(dtype).clamp_min(1.0))
     knots = torch.cat((knots, knots[:, -1:]), dim=1)
-    position = torch.arange(frames * hop, device=f0.device, dtype=torch.float64) / hop
+    position = torch.arange(frames * hop, device=f0.device, dtype=dtype) / hop
     low = position.floor().long()
     weight = position - low
     frequency = torch.exp(knots[:, low] * (1 - weight) + knots[:, low + 1] * weight)
     theta = 2 * math.pi * torch.cumsum(frequency / sample_rate, dim=1)
     if phase is not None:
-        theta = theta + phase.double()[:, None]
+        theta = theta + phase.to(dtype)[:, None]
     theta = torch.remainder(theta, 2 * math.pi)
     harmonics = (limit * sample_rate / frequency).clamp_min(1.0)
     whole = torch.floor(harmonics)
@@ -262,7 +263,7 @@ class TinyVoca(nn.Module):
         phones[sorted(PHONE_IDS)] = True
         self.register_buffer("phone_tokens", phones, persistent=False)
         vowels = torch.zeros(c.vocab_size, dtype=torch.bool)
-        vowels[[SYMBOL_TO_ID[v] for v in VOWELS]] = True
+        vowels[sorted(VOWEL_IDS)] = True
         self.register_buffer("vowel_tokens", vowels, persistent=False)
 
     def encode(self, tokens, stress, lengths, speakers):

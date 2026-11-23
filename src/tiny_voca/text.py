@@ -39,7 +39,6 @@ import subprocess
 import unicodedata
 
 FRONTEND_VERSION = 3
-ESPEAK_VOICE = "en-us"
 SEPARATOR = "_"
 FRONTENDS = ("espeak", "own")
 FRONTEND_VARIABLE = "TINY_VOCA_FRONTEND"
@@ -50,31 +49,138 @@ if _frontend not in FRONTENDS:
 PAD, BOS, EOS, SP, UNK = "<pad>", "<bos>", "<eos>", "<sp>", "<unk>"
 SPECIALS = (PAD, BOS, EOS, SP, UNK)
 PUNCTUATION = (",", ".", "?", "!", ";", ":", '"', "'", "(", ")", "—", "…")
-CONSONANTS = ("p", "b", "t", "d", "k", "ɡ", "f", "v", "θ", "ð", "s", "z", "ʃ", "ʒ", "h",
-              "m", "n", "ŋ", "l", "ɹ", "j", "w", "tʃ", "dʒ", "ɾ", "ʔ")
-VOWELS = ("ə", "ɐ", "ɚ", "ᵻ", "ɪ", "i", "iː", "ɛ", "æ", "ʌ", "ɑː", "ɔ", "ɔː", "ʊ", "uː", "ɜː",
-          "eɪ", "aɪ", "ɔɪ", "oʊ", "aʊ", "iə", "oː",
-          "ɑːɹ", "ɔːɹ", "oːɹ", "ɪɹ", "ɛɹ", "ʊɹ", "aɪɚ", "aɪə", "əl", "n̩")
-PHONES = CONSONANTS + VOWELS
-# Append-only: changing the order or removing a symbol invalidates checkpoints.
-SYMBOLS = SPECIALS + PUNCTUATION + PHONES
-SYMBOL_TO_ID = {symbol: index for index, symbol in enumerate(SYMBOLS)}
-PHONE_SET = frozenset(PHONES)
-PHONE_IDS = frozenset(SYMBOL_TO_ID[p] for p in PHONES) | {SYMBOL_TO_ID[UNK]}
-VOICELESS = frozenset(("p", "t", "k", "f", "θ", "s", "ʃ", "h", "tʃ", "ʔ"))
-VOWEL_SET = frozenset(VOWELS)
 STRESS_MARKS = {"ˈ": 1, "ˌ": 2}
 
-# eSpeak phonemes outside the inventory (foreign words, rare allophones) map to
-# the closest inventory phone(s). Anything else becomes <unk> and is reported.
-FALLBACK = {
-    "r": ("ɹ",), "ɻ": ("ɹ",), "ʁ": ("ɹ",), "x": ("k",), "ç": ("h",), "ɬ": ("l",), "ɫ": ("l",), "ɲ": ("n", "j"),
-    "ts": ("t", "s"), "dz": ("d", "z"), "β": ("v",), "ɣ": ("ɡ",), "ʎ": ("l", "j"),
-    "a": ("æ",), "aː": ("ɑː",), "ɑ": ("ɑː",), "ɒ": ("ɑː",), "ɑ̃": ("ɑː",), "ɔ̃": ("ɔː",), "ɛ̃": ("æ",),
-    "e": ("eɪ",), "eː": ("eɪ",), "o": ("oʊ",), "u": ("uː",), "y": ("uː",), "yː": ("uː",),
-    "ø": ("ɜː",), "øː": ("ɜː",), "œ": ("ɜː",), "ɜ": ("ɜː",), "ɛː": ("ɛ",), "ɪː": ("ɪ",),
-    "əʊ": ("oʊ",), "eə": ("ɛɹ",), "ɪə": ("iə",), "ʊə": ("ʊɹ",), "aʊɚ": ("aʊ", "ɚ"), "l̩": ("əl",), "m̩": ("ə", "m"),
+LANGUAGE_CONFIGS = {
+    "en-us": {
+        "voice": "en-us",
+        "consonants": ("p", "b", "t", "d", "k", "ɡ", "f", "v", "θ", "ð", "s", "z", "ʃ", "ʒ", "h",
+                       "m", "n", "ŋ", "l", "ɹ", "j", "w", "tʃ", "dʒ", "ɾ", "ʔ"),
+        "vowels": ("ə", "ɐ", "ɚ", "ᵻ", "ɪ", "i", "iː", "ɛ", "æ", "ʌ", "ɑː", "ɔ", "ɔː", "ʊ", "uː", "ɜː",
+                   "eɪ", "aɪ", "ɔɪ", "oʊ", "aʊ", "iə", "oː",
+                   "ɑːɹ", "ɔːɹ", "oːɹ", "ɪɹ", "ɛɹ", "ʊɹ", "aɪɚ", "aɪə", "əl", "n̩"),
+        "voiceless": ("p", "t", "k", "f", "θ", "s", "ʃ", "h", "tʃ", "ʔ"),
+        "fallback": {
+            "r": ("ɹ",), "ɻ": ("ɹ",), "ʁ": ("ɹ",), "x": ("k",), "ç": ("h",), "ɬ": ("l",), "ɫ": ("l",), "ɲ": ("n", "j"),
+            "ts": ("t", "s"), "dz": ("d", "z"), "β": ("v",), "ɣ": ("ɡ",), "ʎ": ("l", "j"),
+            "a": ("æ",), "aː": ("ɑː",), "ɑ": ("ɑː",), "ɒ": ("ɑː",), "ɑ̃": ("ɑː",), "ɔ̃": ("ɔː",), "ɛ̃": ("æ",),
+            "e": ("eɪ",), "eː": ("eɪ",), "o": ("oʊ",), "u": ("uː",), "y": ("uː",), "yː": ("uː",),
+            "ø": ("ɜː",), "øː": ("ɜː",), "œ": ("ɜː",), "ɜ": ("ɜː",), "ɛː": ("ɛ",), "ɪː": ("ɪ",),
+            "əʊ": ("oʊ",), "eə": ("ɛɹ",), "ɪə": ("iə",), "ʊə": ("ʊɹ",), "aʊɚ": ("aʊ", "ɚ"), "l̩": ("əl",), "m̩": ("ə", "m"),
+        },
+        "abbreviations": {"mr", "mrs", "ms", "dr", "prof", "st", "jr", "sr", "vs", "etc"},
+    },
+    "en-gb": {
+        "voice": "en-gb",
+        "consonants": ("p", "b", "t", "d", "k", "ɡ", "f", "v", "θ", "ð", "s", "z", "ʃ", "ʒ", "h",
+                       "m", "n", "ŋ", "l", "ɹ", "j", "w", "tʃ", "dʒ", "ɾ", "ʔ"),
+        "vowels": ("ə", "ɐ", "ɪ", "i", "iː", "ɛ", "æ", "ʌ", "ɑː", "ɒ", "ɔ", "ɔː", "ʊ", "uː", "ɜː",
+                   "eɪ", "aɪ", "ɔɪ", "əʊ", "aʊ", "ɪə", "iə", "eə", "ʊə", "aɪə", "aʊə", "oː", "əl", "n̩"),
+        "voiceless": ("p", "t", "k", "f", "θ", "s", "ʃ", "h", "tʃ", "ʔ"),
+        "fallback": {
+            "r": ("ɹ",), "ɻ": ("ɹ",), "ʁ": ("ɹ",), "x": ("k",), "ç": ("h",), "ɬ": ("l",), "ɫ": ("l",), "ɲ": ("n", "j"),
+            "ts": ("t", "s"), "dz": ("d", "z"), "β": ("v",), "ɣ": ("ɡ",), "ʎ": ("l", "j"),
+            "a": ("æ",), "aː": ("ɑː",), "ɑ": ("ɑː",), "ɒ": ("ɑː",), "ɑ̃": ("ɑː",), "ɔ̃": ("ɔː",), "ɛ̃": ("æ",),
+            "e": ("eɪ",), "eː": ("eɪ",), "o": ("əʊ",), "oʊ": ("əʊ",), "u": ("uː",), "y": ("uː",), "yː": ("uː",),
+            "ø": ("ɜː",), "øː": ("ɜː",), "œ": ("ɜː",), "ɜ": ("ɜː",), "ɛː": ("ɛ",), "ɪː": ("ɪ",),
+            "ɚ": ("ə",), "ɑːɹ": ("ɑː",), "ɔːɹ": ("ɔː",), "oːɹ": ("ɔː",), "ɪɹ": ("ɪə",), "ɛɹ": ("eə",),
+            "ʊɹ": ("ʊə",), "aʊɚ": ("aʊə",), "aɪɚ": ("aɪə",), "l̩": ("əl",), "m̩": ("ə", "m"),
+        },
+        "abbreviations": {"mr", "mrs", "ms", "dr", "prof", "st", "jr", "sr", "vs", "etc"},
+    },
+    "nl": {
+        "voice": "nl",
+        "consonants": ("p", "b", "t", "d", "k", "ɡ", "f", "v", "s", "z", "ʃ", "ʒ", "x", "ɣ", "h",
+                       "m", "n", "ŋ", "l", "r", "j", "ʋ", "w", "ʔ", "tʃ", "dʒ"),
+        "vowels": ("ə", "ɪ", "i", "iː", "eː", "ɛ", "ɛː", "ɑ", "aː", "ɔ", "ɔː", "oː", "u", "uː", "y", "yː",
+                   "øː", "œː", "ɵ", "ɪː", "ɛɪ", "œy", "ʌʊ", "aʊ", "aɪ", "ɔɪ", "ui"),
+        "voiceless": ("p", "t", "k", "f", "s", "ʃ", "x", "h", "ʔ", "tʃ"),
+        "fallback": {
+            "tʲ": ("t", "j"), "dʲ": ("d", "j"), "nʲ": ("n", "j"), "sʲ": ("s", "j"), "lʲ": ("l", "j"),
+            "kʲ": ("k", "j"), "pʲ": ("p", "j"), "bʲ": ("b", "j"), "mʲ": ("m", "j"),
+            "ɻ": ("r",), "ʁ": ("r",), "ɹ": ("r",), "ç": ("x",), "g": ("ɣ",),
+            "ɑu": ("ʌʊ",), "ou": ("ʌʊ",), "ɛi": ("ɛɪ",), "e": ("eː",), "o": ("oː",), "a": ("ɑ",),
+            "œ": ("øː",), "ts": ("t", "s"), "dz": ("d", "z"), "θ": ("s",), "ð": ("z",),
+        },
+        "abbreviations": {"bv", "bijv", "dr", "drs", "prof", "ds", "ir", "ing", "mr", "mevr", "dhr", "blz", "pag", "vs", "enz"},
+    },
 }
+
+LANGUAGE_VARIABLE = "TINY_VOCA_LANG"
+_language = os.environ.get(LANGUAGE_VARIABLE, "en-us").lower()
+if _language not in LANGUAGE_CONFIGS:
+    raise ValueError(f"{LANGUAGE_VARIABLE} must be one of {tuple(LANGUAGE_CONFIGS.keys())}, not {_language!r}")
+
+PHONE_SET = set()
+PHONE_IDS = set()
+VOICELESS = set()
+VOWEL_SET = set()
+VOWEL_IDS = set()
+FALLBACK = {}
+ABBREVIATIONS = set()
+SYMBOL_TO_ID = {}
+ID_TO_SYMBOL = {}
+SYMBOLS = ()
+PHONES = ()
+CONSONANTS = ()
+VOWELS = ()
+ESPEAK_VOICE = "en-us"
+
+
+def set_language(lang):
+    global _language, ESPEAK_VOICE, CONSONANTS, VOWELS, PHONES, SYMBOLS
+    lang = lang.lower()
+    if lang not in LANGUAGE_CONFIGS:
+        raise ValueError(f"Language must be one of {tuple(LANGUAGE_CONFIGS.keys())}, not {lang!r}")
+    _language = lang
+    cfg = LANGUAGE_CONFIGS[lang]
+    ESPEAK_VOICE = cfg["voice"]
+    CONSONANTS = tuple(cfg["consonants"])
+    VOWELS = tuple(cfg["vowels"])
+    PHONES = CONSONANTS + VOWELS
+    SYMBOLS = SPECIALS + PUNCTUATION + PHONES
+
+    SYMBOL_TO_ID.clear()
+    SYMBOL_TO_ID.update({symbol: index for index, symbol in enumerate(SYMBOLS)})
+
+    ID_TO_SYMBOL.clear()
+    ID_TO_SYMBOL.update({index: symbol for index, symbol in enumerate(SYMBOLS)})
+
+    PHONE_SET.clear()
+    PHONE_SET.update(PHONES)
+
+    PHONE_IDS.clear()
+    PHONE_IDS.update(SYMBOL_TO_ID[p] for p in PHONES)
+    PHONE_IDS.add(SYMBOL_TO_ID[UNK])
+
+    VOICELESS.clear()
+    VOICELESS.update(cfg["voiceless"])
+
+    VOWEL_SET.clear()
+    VOWEL_SET.update(VOWELS)
+
+    VOWEL_IDS.clear()
+    VOWEL_IDS.update(SYMBOL_TO_ID[v] for v in VOWELS)
+
+    FALLBACK.clear()
+    FALLBACK.update(cfg["fallback"])
+
+    ABBREVIATIONS.clear()
+    ABBREVIATIONS.update(cfg["abbreviations"])
+
+
+SUPPORTED_LANGUAGES = tuple(LANGUAGE_CONFIGS.keys())
+activate_language = set_language
+
+
+def language():
+    return _language
+
+
+active_language = language
+
+
+set_language(_language)
 
 _QUOTES = str.maketrans({"‘": "'", "’": "'", "‚": "'", "‛": "'", "`": "'", "´": "'",
                          "“": '"', "”": '"', "„": '"', "‟": '"', "«": '"', "»": '"',
@@ -127,8 +233,11 @@ def frontend_identity():
     if _frontend == "own":
         phonemizer = _dizione()
         return {"frontend_version": phonemizer.VERSION, "phonemizer": "dizione", "symbols": list(SYMBOLS)}
-    return {"frontend_version": FRONTEND_VERSION, "voice": ESPEAK_VOICE, "separator": SEPARATOR,
-            "symbols": list(SYMBOLS), "fallback": {key: list(value) for key, value in sorted(FALLBACK.items())}}
+    res = {"frontend_version": FRONTEND_VERSION, "voice": ESPEAK_VOICE, "separator": SEPARATOR,
+           "symbols": list(SYMBOLS), "fallback": {key: list(value) for key, value in sorted(FALLBACK.items())}}
+    if _language != "en-us":
+        res["language"] = _language
+    return res
 
 
 def frontend_runtime():

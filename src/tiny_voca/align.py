@@ -42,8 +42,17 @@ ALIGNER_CENTER = 200          # a frame's centre: 12.5 ms after its start
 ALIGNMENT_VERSION = 2
 PAUSING = (",", ".", "?", "!", ";", ":", "—", "…")
 # Every inventory phone is a label of the recogniser (checked when it loads);
-# only the unknown-phone token needs a stand-in.
-ALIGNER_LABEL_FALLBACK = {UNK: "<unk>"}
+# fallback mapping for inventory phones that do not have dedicated aligner tokens.
+ALIGNER_LABEL_FALLBACK = {
+    UNK: "<unk>",
+    "œy": "œ",
+    "ʌʊ": "aʊ",
+    "ɑu": "aʊ",
+    "ɛi": "ɛɪ",
+    "ou": "oʊ",
+    "ɪə": "iə",
+    "aʊə": "aʊ",
+}
 
 
 @dataclass(frozen=True)
@@ -250,17 +259,23 @@ def quality(symbols, durations, spans, log_probs, labels, voiced, level_db, hop,
 class PhoneRecognizer:
     """The pretrained annotation model. Loaded from the local HF cache only."""
 
-    def __init__(self, device="cuda", name=ALIGNER_MODEL, local_files_only=True):
+    def __init__(self, device=None, name=ALIGNER_MODEL, local_files_only=True):
         import json
         from pathlib import Path
         import torch
         from huggingface_hub import hf_hub_download
         from transformers import Wav2Vec2ForCTC
+        if device is None:
+            device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
         self.torch, self.device = torch, torch.device(device)
-        self.model = Wav2Vec2ForCTC.from_pretrained(name, local_files_only=local_files_only).to(self.device).eval()
+        try:
+            self.model = Wav2Vec2ForCTC.from_pretrained(name, local_files_only=local_files_only).to(self.device).eval()
+            vocabulary = Path(hf_hub_download(name, "vocab.json", local_files_only=local_files_only))
+        except Exception:
+            self.model = Wav2Vec2ForCTC.from_pretrained(name, local_files_only=False).to(self.device).eval()
+            vocabulary = Path(hf_hub_download(name, "vocab.json", local_files_only=False))
         if self.device.type == "cuda":
             self.model = self.model.half()
-        vocabulary = Path(hf_hub_download(name, "vocab.json", local_files_only=local_files_only))
         self.vocabulary = json.loads(vocabulary.read_text(encoding="utf-8"))
         self.blank = int(self.model.config.pad_token_id)
         self.name = name

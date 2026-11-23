@@ -21,6 +21,7 @@ from collections import Counter, defaultdict
 import concurrent.futures
 import hashlib
 import json
+import os
 from pathlib import Path
 import time
 import numpy as np
@@ -143,7 +144,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--dataset-revision", required=True)
     parser.add_argument("--config", type=Path)
-    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--device", default="mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
     parser.add_argument("--splits", nargs="+", default=list(SPLITS), choices=SPLITS)
     parser.add_argument("--limit", type=int, help="Annotate only the first N rows per split (smoke test; never complete)")
     parser.add_argument("--resume", action="store_true")
@@ -157,7 +158,12 @@ def main():
     parser.add_argument("--min-vowel-voiced", type=float, default=0.5)
     parser.add_argument("--min-phones-per-second", type=float, default=4.0)
     parser.add_argument("--max-phones-per-second", type=float, default=30.0)
+    parser.add_argument("--language", "--lang", choices=("en-us", "en-gb", "nl"),
+                        default=os.environ.get("TINY_VOCA_LANG", "en-us"),
+                        help="Language to activate for annotation (default: $TINY_VOCA_LANG or en-us)")
     args = parser.parse_args()
+    from .text import set_language
+    set_language(args.language)
     config = Config.from_dict(json.loads(args.config.read_text())) if args.config else Config()
     settings = AlignmentSettings(min_pause_frames=args.min_pause_frames)
     limits = {key: getattr(args, key) for key in ("max_weak_phone_fraction", "min_token_probability", "max_phone_frames",
@@ -222,8 +228,10 @@ def main():
                     log(f"aligned {split} {count}/{len(pending)}")
         raw[split] = done
     del recognizer
-    if args.device.startswith("cuda"):
+    if args.device.startswith("cuda") and torch.cuda.is_available():
         torch.cuda.empty_cache()
+    elif args.device.startswith("mps") and hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+        torch.mps.empty_cache()
 
     # 2. Optional boundary refinement over all splits together.
     stages = {"ctc": {split: {key: value["durations"] for key, value in raw[split].items() if value["ok"]} for split in args.splits}}

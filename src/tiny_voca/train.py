@@ -270,7 +270,7 @@ def main():
     parser.add_argument("--validation", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--config", type=Path)
-    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--device", default="mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu"))
     parser.add_argument("--steps", type=int, default=100000)
     parser.add_argument("--batch-frames", type=int, default=9000, help="Padded acoustic frames per batch")
     parser.add_argument("--max-batch", type=int, default=32)
@@ -308,7 +308,12 @@ def main():
     parser.add_argument("--recorded-voicing", action="store_true", help="Use the pitch tracker's voicing as it is, "
                         "without marking vowel frames voiced")
     parser.add_argument("--no-preload", action="store_true", help="Load feature files lazily instead of before the first step")
+    parser.add_argument("--language", "--lang", choices=("en-us", "en-gb", "nl"),
+                        default=os.environ.get("TINY_VOCA_LANG", "en-us"),
+                        help="Language to activate for training (default: $TINY_VOCA_LANG or en-us)")
     args = parser.parse_args()
+    from .text import set_language
+    set_language(args.language)
     if min(args.steps, args.batch_frames, args.max_batch, args.save_every, args.keep_every, args.log_every, args.crops, args.gan_ramp) < 1:
         parser.error("steps, batch limits and intervals must be positive")
     if args.max_seconds <= 0 or args.learning_rate <= 0 or args.lr_half_life <= 0 or not 0 <= args.teacher_final <= 1:
@@ -335,8 +340,9 @@ def main():
         raise SystemExit("the cloud budget deadline has passed (or is too close); not starting")
     c = Config.from_dict(json.loads(args.config.read_text())) if args.config else Config()
     torch.manual_seed(args.seed)
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
+    if torch.cuda.is_available():
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
     train = AnnotatedDataset(args.train, c, voiced_vowels=not args.recorded_voicing)
     validation = AnnotatedDataset(args.validation, c, voiced_vowels=not args.recorded_voicing)
     check_leakage(train, validation)
@@ -386,7 +392,7 @@ def main():
         critic_optimizer.load_state_dict(state["critic_optimizer"])
         sampler.load_state(state["sampler"])
         torch.set_rng_state(state["torch_rng"].cpu())
-        if str(args.device).startswith("cuda") and state["cuda_rng"] is not None:
+        if str(args.device).startswith("cuda") and torch.cuda.is_available() and state["cuda_rng"] is not None:
             torch.cuda.set_rng_state_all([x.cpu() for x in state["cuda_rng"]])
         step = state["step"]
     elif args.init_from:
@@ -425,7 +431,7 @@ def main():
         return {"format_version": CHECKPOINT_FORMAT, "config": c.to_dict(), "frontend": frontend_fingerprint(), "annotation": train.annotation,
                 "step": step, "datasets": fingerprints, "recipe": recipe, "system": system.state_dict(), "critics": critics.state_dict(),
                 "optimizer": optimizer.state_dict(), "critic_optimizer": critic_optimizer.state_dict(), "sampler": sampler.state(),
-                "torch_rng": torch.get_rng_state(), "cuda_rng": torch.cuda.get_rng_state_all() if str(args.device).startswith("cuda") else None}
+                "torch_rng": torch.get_rng_state(), "cuda_rng": torch.cuda.get_rng_state_all() if (str(args.device).startswith("cuda") and torch.cuda.is_available()) else None}
     if step == args.gan_start and not args.resume:
         atomic_save(snapshot(), args.output / f"step-{step:08d}.pt")
     window, window_steps, window_start = defaultdict(float), 0, time.monotonic()
@@ -442,8 +448,10 @@ def main():
         retain = step == args.gan_start or step % args.keep_every == 0
         save = step % args.save_every == 0 or should_stop or retain
         if step % args.log_every == 0 or save:
-            if str(args.device).startswith("cuda"):
+            if str(args.device).startswith("cuda") and torch.cuda.is_available():
                 torch.cuda.synchronize()
+            elif str(args.device).startswith("mps") and hasattr(torch, "mps"):
+                torch.mps.synchronize()
             seconds = time.monotonic() - window_start
             record = {key: (value if key in ("frames", "utterances") else value / window_steps) for key, value in window.items()}
             record.update(step=step, elapsed_seconds=elapsed, steps_per_second=window_steps / max(seconds, 1e-9),

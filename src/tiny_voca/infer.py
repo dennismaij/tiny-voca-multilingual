@@ -27,6 +27,9 @@ def load_model(path, device="cpu", check_frontend=True):
     state = torch.load(path, map_location="cpu", weights_only=True)
     if state.get("format_version") != CHECKPOINT_FORMAT:
         raise ValueError("unsupported checkpoint format: byte-token checkpoints (format 2-3) cannot be used with this code")
+    if isinstance(state.get("frontend"), dict) and "language" in state["frontend"]:
+        from .text import set_language
+        set_language(state["frontend"]["language"])
     if check_frontend and state["frontend"]["fingerprint"] != frontend_fingerprint():
         raise ValueError("checkpoint was trained with a different phoneme inventory/front end")
     model = TinyVoca(Config.from_dict(state["config"]))
@@ -35,8 +38,13 @@ def load_model(path, device="cpu", check_frontend=True):
 
 
 def match_frontend(path):
-    """Select the front end the checkpoint was trained with."""
-    wanted = torch.load(path, map_location="cpu", weights_only=True)["frontend"]["fingerprint"]
+    """Select the front end and language the checkpoint was trained with."""
+    state = torch.load(path, map_location="cpu", weights_only=True)
+    frontend_info = state.get("frontend", {})
+    if isinstance(frontend_info, dict) and "language" in frontend_info:
+        from .text import set_language
+        set_language(frontend_info["language"])
+    wanted = frontend_info.get("fingerprint") if isinstance(frontend_info, dict) else frontend_info
     for name in FRONTENDS:
         set_frontend(name)
         try:
@@ -180,11 +188,16 @@ def main():
     parser.add_argument("--pitch-shift", type=float, default=0, help="Added to log F0 (0.058 is about one semitone)")
     parser.add_argument("--pitch-range", type=float, default=1, help="Scale pitch movement around the utterance mean (1 = as predicted)")
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--language", "--lang", choices=("en-us", "en-gb", "nl"),
+                        help="Language to activate (default: automatically inferred from checkpoint)")
     parser.add_argument("--frontend", choices=FRONTENDS, help="Phonemizer (default: TINY_VOCA_FRONTEND, else the one the checkpoint was trained with)")
     parser.add_argument("--allow-frontend-mismatch", action="store_true",
                         help="Speak although the checkpoint was trained on the other front end's tokens")
     args = parser.parse_args()
     import soundfile as sf
+    if args.language:
+        from .text import set_language
+        set_language(args.language)
     if args.frontend:
         set_frontend(args.frontend)
     elif FRONTEND_VARIABLE not in os.environ:

@@ -78,7 +78,7 @@ def banded_viterbi(scores, starts, ends, band):
     return durations
 
 
-def refine(items, config, device="cuda", iterations=2, band=4, steps=3000, batch=256, window=128,
+def refine(items, config, device=None, iterations=2, band=4, steps=3000, batch=256, window=128,
            prior_scale=0.5, seed=20261113, log=print):
     """Refine durations for ``items``: dicts with ``symbols``, ``durations``,
     ``mel`` (float tensor [frames, n_mels]), ``speaker`` (int) and ``group``
@@ -86,6 +86,8 @@ def refine(items, config, device="cuda", iterations=2, band=4, steps=3000, batch
 
     Returns one list of per-utterance duration lists per iteration.
     """
+    if device is None:
+        device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
     generator = torch.Generator().manual_seed(seed)
     torch.manual_seed(seed)
     # Two-fold cross-fitting by sentence: a recording is re-timed only by a

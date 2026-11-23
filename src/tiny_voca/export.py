@@ -33,7 +33,8 @@ from torch import nn
 import torch.nn.functional as F
 
 from .infer import load_model, match_frontend
-from .text import SYMBOLS, frontend_fingerprint, frontend_identity
+from . import text
+from .text import frontend_fingerprint, frontend_identity
 
 INPUTS = ("tokens", "stress", "voice", "speed", "pitch_shift", "pitch_range")
 OUTPUTS = ("audio", "durations")
@@ -202,7 +203,7 @@ class Exportable(nn.Module):
 
 
 def example_inputs(length=24):
-    tokens = torch.randint(5, len(SYMBOLS), (1, length))
+    tokens = torch.randint(5, len(text.SYMBOLS), (1, length))
     one = lambda value: torch.tensor([value], dtype=torch.float32)
     return tokens, torch.zeros_like(tokens), torch.tensor([0]), one(1.0), one(0.0), one(1.0)
 
@@ -225,7 +226,7 @@ def export(model, path, external_noise=False, opset=17):
 def metadata(model, checkpoint):
     c = model.config
     state = torch.load(checkpoint, map_location="cpu", weights_only=True)
-    return {"sample_rate": c.sample_rate, "hop": c.hop, "voices": list(c.speakers), "symbols": list(SYMBOLS),
+    return {"sample_rate": c.sample_rate, "hop": c.hop, "voices": list(c.speakers), "symbols": list(text.SYMBOLS),
             "max_tokens": c.max_tokens, "max_frames": c.max_frames, "step": state.get("step"),
             "frontend": frontend_identity().get("phonemizer", "espeak"), "frontend_fingerprint": frontend_fingerprint(),
             "inputs": list(INPUTS), "outputs": list(OUTPUTS)}
@@ -237,8 +238,14 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--external-noise", action="store_true", help="Take the noise signal as an input (for exact comparisons)")
     parser.add_argument("--opset", type=int, default=17)
+    parser.add_argument("--language", "--lang", choices=("en-us", "en-gb", "nl"),
+                        help="Language to activate (default: inferred from checkpoint)")
     args = parser.parse_args()
-    match_frontend(args.checkpoint)
+    if args.language:
+        from .text import set_language
+        set_language(args.language)
+    else:
+        match_frontend(args.checkpoint)
     model = load_model(args.checkpoint, "cpu")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     export(model, args.output, args.external_noise, args.opset)

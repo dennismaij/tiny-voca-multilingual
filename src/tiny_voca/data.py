@@ -11,9 +11,7 @@ from pathlib import Path
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-from .text import PHONE_IDS, SYMBOL_TO_ID, VOWELS, frontend_fingerprint
-
-VOWEL_IDS = frozenset(SYMBOL_TO_ID[v] for v in VOWELS)
+from .text import PHONE_IDS, VOWEL_IDS, frontend_fingerprint
 
 
 def continuous_pitch(pitch, voiced, default=0.0, window=5, tolerance=0.45):

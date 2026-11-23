@@ -9,8 +9,16 @@ runs/
 *.onnx
 *.wav
 *.flac
+*.mp3
 .env
 ops/
 web/public/assets/
 web/.wrangler/
 node_modules/
+
+# Local training artifacts and datasets
+datasets/
+features/
+annotations/
+checkpoints/
+
