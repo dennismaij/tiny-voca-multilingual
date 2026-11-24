@@ -5,14 +5,21 @@ is used only by the annotation step, and an ASR model only by evaluation.
 """
 
 from .config import Config
-from .model import TinyVoca
+
+try:
+    from .model import TinyVoca
+    from .runtime import TinyVocaPipeline, get_pipeline
+except ImportError:
+    TinyVoca = None
+    TinyVocaPipeline = None
+    get_pipeline = None
+
 from .text import (
     SUPPORTED_LANGUAGES,
     activate_language,
     active_language,
     set_language,
 )
-from .runtime import TinyVocaPipeline, get_pipeline
 
 __all__ = [
     "Config",
@@ -23,4 +30,9 @@ __all__ = [
     "active_language",
     "set_language",
     "SUPPORTED_LANGUAGES",
+    "register_word_override",
+    "register_alias",
+    "load_pronunciation_dictionary",
+    "clear_custom_overrides",
+    "preprocess_text_for_pronunciation",
 ]

@@ -38,6 +38,16 @@ import shutil
 import subprocess
 import unicodedata
 
+from .pronunciation import (
+    get_active_word_overrides,
+    get_active_aliases,
+    preprocess_text_for_pronunciation,
+    register_word_override,
+    register_alias,
+    load_pronunciation_dictionary,
+    clear_custom_overrides,
+)
+
 FRONTEND_VERSION = 3
 SEPARATOR = "_"
 FRONTENDS = ("espeak", "own")
@@ -253,6 +263,7 @@ def frontend_fingerprint():
 
 
 def normalize_text(text):
+    text = preprocess_text_for_pronunciation(text, _language)
     text = unicodedata.normalize("NFKC", text).translate(_QUOTES)
     text = re.sub(r"\.{3,}", "…", text)
     text = re.sub(r"-{2,}|\s-\s", "—", text)
@@ -377,8 +388,13 @@ def espeak_words(piece):
 def parse_espeak(output, text_words=None):
     words = []
     output_words = _LANGUAGE_TAG.sub("", output).split()
+    overrides = get_active_word_overrides(_language)
     for idx, word in enumerate(output_words):
         text_word = text_words[idx] if (text_words and idx < len(text_words)) else ""
+        clean_word = re.sub(r"[^\w\-]", "", text_word).lower()
+        if clean_word in overrides:
+            words.append(list(overrides[clean_word]))
+            continue
         units = []
         for unit in word.split(SEPARATOR):
             stress = 0
