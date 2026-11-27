@@ -395,15 +395,6 @@ def normalize_currencies_and_numbers(text: str, lang: str = "en-gb") -> str:
             return whole_str
 
     text = re.sub(r'€(\d+)([.,]\d{2})?', _replace_euros, text)
-
-    # Standalone 1-4 digit integers
-    def _replace_num(m):
-        val = int(m.group(0))
-        if is_dutch:
-            return number_to_words_nl(val)
-        return number_to_words_en(val)
-
-    text = re.sub(r'\b\d{1,4}\b', _replace_num, text)
     return text
 
 
